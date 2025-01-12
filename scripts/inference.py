@@ -52,8 +52,8 @@ def main(config, args):
     unet = unet.to(dtype=torch.float16)
 
     # set xformers
-    if is_xformers_available():
-        unet.enable_xformers_memory_efficient_attention()
+#    if is_xformers_available():
+#        unet.enable_xformers_memory_efficient_attention()
 
     pipeline = LipsyncPipeline(
         vae=vae,

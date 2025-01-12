@@ -1,18 +1,5 @@
 #!/bin/bash
 
-# Create a new conda environment
-conda create -y -n latentsync python=3.10.13
-conda activate latentsync
-
-# Install ffmpeg
-conda install -y -c conda-forge ffmpeg
-
-# Python dependencies
-pip install -r requirements.txt
-
-# OpenCV dependencies
-sudo apt -y install libgl1
-
 # Download all the checkpoints from HuggingFace
 huggingface-cli download chunyu-li/LatentSync --local-dir checkpoints --exclude "*.git*" "README.md"
 
