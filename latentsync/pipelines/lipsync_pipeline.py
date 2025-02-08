@@ -10,6 +10,9 @@ import numpy as np
 import torch
 import torchvision
 
+from gfpgan import GFPGANer
+from codeformer import CodeFormer
+
 from diffusers.utils import is_accelerate_available
 from packaging import version
 
@@ -312,6 +315,7 @@ class LipsyncPipeline(DiffusionPipeline):
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
         callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
+        superres_method: Optional[str] = None, 
         **kwargs,
     ):
         is_train = self.unet.training
@@ -473,3 +477,6 @@ class LipsyncPipeline(DiffusionPipeline):
 
         command = f"ffmpeg -y -loglevel error -nostdin -i {os.path.join(temp_dir, 'video.mp4')} -i {os.path.join(temp_dir, 'audio.wav')} -c:v libx264 -c:a aac -q:v 0 -q:a 0 {video_out_path}"
         subprocess.run(command, shell=True)
+
+
+    
