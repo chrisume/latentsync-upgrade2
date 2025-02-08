@@ -31,18 +31,11 @@ class Predictor(BasePredictor):
 
     def predict(
         self,
-        video: Path = Input(
-            description="Input video", default=None
-        ),
-        audio: Path = Input(
-            description="Input audio to ", default=None
-        ),
-        guidance_scale: float = Input(
-            description="Guidance scale", ge=0, le=10, default=1.0
-        ),
-        seed: int = Input(
-            description="Set to 0 for Random seed", default=0
-        )
+        video: Path = Input(description="Input video", default=None),
+        audio: Path = Input(description="Input audio", default=None),
+        guidance_scale: float = Input(description="Guidance scale", ge=0, le=10, default=1.0),
+        seed: int = Input(description="Set to 0 for Random seed", default=0),
+        superres: str = Input(description="Super-resolution method (GFPGAN/CodeFormer)", default="None")  # Added superres
     ) -> Path:
         """Run a single prediction on the model"""
         if seed <= 0:
@@ -54,7 +47,24 @@ class Predictor(BasePredictor):
         config_path = "configs/unet/second_stage.yaml"
         ckpt_path = "checkpoints/latentsync_unet.pt"
         output_path = "/tmp/video_out.mp4"
-    
-        # Run the following command:
-        os.system(f"python -m scripts.inference --unet_config_path {config_path} --inference_ckpt_path {ckpt_path} --guidance_scale {str(guidance_scale)} --video_path {video_path} --audio_path {audio_path} --video_out_path {output_path} --seed {seed}")    
+
+        # Include super-resolution argument if provided
+        if superres not in ["None", ""]:  
+            superres_arg = f"--superres {superres}"
+        else:
+            superres_arg = ""
+
+        # Run inference with the correct super-resolution option
+        os.system(
+            f"python -m scripts.inference "
+            f"--unet_config_path {config_path} "
+            f"--inference_ckpt_path {ckpt_path} "
+            f"--guidance_scale {str(guidance_scale)} "
+            f"--video_path {video_path} "
+            f"--audio_path {audio_path} "
+            f"--video_out_path {output_path} "
+            f"--seed {seed} "
+            f"{superres_arg}"  # Add superres if it's not None
+        )
+
         return Path(output_path)
