@@ -43,3 +43,8 @@ wandb/
 !/latentsync/utils/mask.png
 /checkpoints/
 !/assets/*
+
+
+setup_env.bat
+env
+checkpoints
