@@ -288,6 +288,11 @@ class LipsyncPipeline(DiffusionPipeline):
             face = (face / 2 + 0.5).clamp(0, 1)
             face = (face * 255).to(torch.uint8).cpu().numpy()
             # face = cv2.resize(face, (width, height), interpolation=cv2.INTER_LANCZOS4)
+            if hasattr(self, "superres") and self.superres.lower() in ["gfpgan", "codeformer", "both"]:
+                # Extract the corresponding original face region from the full video frame using the box coordinates
+                orig_face_region = video_frames[index][y1:y2, x1:x2]
+                # Enhance the generated face using our helper function
+                face = apply_superresolution(face, orig_face_region, self.superres)
             out_frame = self.image_processor.restorer.restore_img(video_frames[index], face, affine_matrices[index])
             out_frames.append(out_frame)
         return np.stack(out_frames, axis=0)
@@ -295,6 +300,7 @@ class LipsyncPipeline(DiffusionPipeline):
     @torch.no_grad()
     def __call__(
         self,
+        
         video_path: str,
         audio_path: str,
         video_out_path: str,
@@ -314,6 +320,7 @@ class LipsyncPipeline(DiffusionPipeline):
         callback_steps: Optional[int] = 1,
         **kwargs,
     ):
+        self.superres = kwargs.get("superres", "none")
         is_train = self.unet.training
         self.unet.eval()
 
@@ -322,7 +329,7 @@ class LipsyncPipeline(DiffusionPipeline):
         # 0. Define call parameters
         batch_size = 1
         device = self._execution_device
-        self.image_processor = ImageProcessor(height, mask=mask, device="cuda")
+        self.image_processor = ImageProcessor(height, mask=mask, device="cuda" if torch.cuda.is_available() else "cpu" )
         self.set_progress_bar_config(desc=f"Sample frames: {num_frames}")
 
         faces, original_video_frames, boxes, affine_matrices = self.affine_transform_video(video_path)

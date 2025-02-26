@@ -48,7 +48,7 @@ class ImageProcessor:
         if mask in ["mouth", "face", "eye"]:
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)  # Process single image
         if mask == "fix_mask":
-            self.face_mesh = None
+            # self.face_mesh = None
             self.smoother = laplacianSmooth()
             self.restorer = AlignRestore()
 
@@ -63,20 +63,36 @@ class ImageProcessor:
                 )
                 self.face_mesh = None
             else:
-                # self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)  # Process single image
-                self.face_mesh = None
+                self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)  # Process single image
+                # self.face_mesh = None
                 self.fa = None
 
     def detect_facial_landmarks(self, image: np.ndarray):
-        height, width, _ = image.shape
-        results = self.face_mesh.process(image)
-        if not results.multi_face_landmarks:  # Face not detected
-            raise RuntimeError("Face not detected")
-        face_landmarks = results.multi_face_landmarks[0]  # Only use the first face in the image
-        landmark_coordinates = [
-            (int(landmark.x * width), int(landmark.y * height)) for landmark in face_landmarks.landmark
-        ]  # x means width, y means height
-        return landmark_coordinates
+       """
+       Detect facial landmarks using mediapipe FaceMesh.
+       If no face is detected, return a default set of landmark coordinates.
+       """
+       # Process the image with mediapipe FaceMesh
+       results = self.face_mesh.process(image)
+    
+       if not results.multi_face_landmarks:
+          # Instead of raising an error, log a warning and use a default landmark set.
+          print("Warning: Face not detected. Using default landmarks.")
+          height, width, _ = image.shape
+        # Create a default landmark list.
+        # Here we assume mediapipe would normally return 468 landmarks.
+        # We set every landmark to the center of the image.
+          default_landmarks = [(width // 2, height // 2)] * 468
+          return default_landmarks
+    
+        # Use the first detected face's landmarks.
+       face_landmarks = results.multi_face_landmarks[0]
+       landmark_coordinates = [
+        (int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0]))
+        for landmark in face_landmarks.landmark
+        ]
+       return landmark_coordinates
+
 
     def preprocess_one_masked_image(self, image: torch.Tensor) -> np.ndarray:
         image = self.resize(image)
@@ -116,6 +132,13 @@ class ImageProcessor:
         return pixel_values, masked_pixel_values, mask
 
     def affine_transform(self, image: torch.Tensor) -> np.ndarray:
+        if hasattr(image, "numpy"):
+           image = rearrange(image, "c h w -> h w c").numpy()
+        else:
+           image = rearrange(image, "c h w -> h w c")
+          # Convert the image from BGR to RGB (mediapipe expects RGB)
+          
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         # image = rearrange(image, "c h w-> h w c").numpy()
         if self.fa is None:
             landmark_coordinates = np.array(self.detect_facial_landmarks(image))

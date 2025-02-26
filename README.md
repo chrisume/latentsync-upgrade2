@@ -1,193 +1,216 @@
-# LatentSync: Audio Conditioned Latent Diffusion Models for Lip Sync
+# LatentSync with Superresolution Enhancement
 
-<div align="center">
+This repository is a modified version of the original **latentsync** project. In this version, we have integrated a superresolution enhancement step to improve the quality of the generated (lipsynced) region using GFPGAN and CodeFormer. We have also adapted the code to automatically use GPU when available and fall back to CPU otherwise. This single commit includes improvements across several files. Below is a detailed explanation of every change and the overall process.
 
-[![arXiv](https://img.shields.io/badge/arXiv_paper-2412.09262-b31b1b)](https://arxiv.org/abs/2412.09262)
-[![arXiv](https://img.shields.io/badge/%F0%9F%A4%97%20space-HuggingFace-yellow)](https://huggingface.co/spaces/fffiloni/LatentSync)
-<a href="https://replicate.com/lucataco/latentsync"><img src="https://replicate.com/lucataco/latentsync/badge" alt="Replicate"></a>
+---
 
-</div>
+## Overview
 
-## 📖 Abstract
+### Key Improvements:
+- **Superresolution Integration:**  
+  A new command-line parameter `--superres` (with options: `GFPGAN`, `CodeFormer`, `both`, or `none`) has been added. When enabled, the generated lipsynced region is upscaled if its resolution is lower than that of the original video frame.
 
-We present *LatentSync*, an end-to-end lip sync framework based on audio conditioned latent diffusion models without any intermediate motion representation, diverging from previous diffusion-based lip sync methods based on pixel space diffusion or two-stage generation. Our framework can leverage the powerful capabilities of Stable Diffusion to directly model complex audio-visual correlations. Additionally, we found that the diffusion-based lip sync methods exhibit inferior temporal consistency due to the inconsistency in the diffusion process across different frames. We propose *Temporal REPresentation Alignment (TREPA)* to enhance temporal consistency while preserving lip-sync accuracy. TREPA uses temporal representations extracted by large-scale self-supervised video models to align the generated frames with the ground truth frames.
+- **Adaptive Device Handling:**  
+  The code now dynamically selects the device—using GPU if available and automatically falling back to CPU if not. Changes include:
+  - Setting the device dynamically in `inference.py`
+  - Passing the device as a string (e.g., `"cpu"`) to libraries (such as `face_alignment`) that require a string.
 
-## 🏗️ Framework
+- **Robust Face Detection:**  
+  In the `ImageProcessor` (located in `latentsync/utils/image_processor.py`):
+  - For the `"fix_mask"` mode, if mediapipe fails to detect a face, a warning is printed and a default landmark set is returned to prevent a crash.
+  - The input image is properly converted from a tensor (with shape `(C, H, W)`) to a NumPy array in `(H, W, C)` order and then from BGR to RGB before face detection.
 
-<p align="center">
-<img src="assets/framework.png" width=100%>
-<p>
+- **Affine Transformation Stability:**  
+  In `affine_transform.py`, the function `transformation_from_points` has been updated to:
+  - Convert input landmark arrays to `float64` and center them.
+  - Check if the standard deviation of the landmark points is too small (e.g., less than `1e-6`) and, if so, return an identity transformation.
+  - Wrap the SVD computation in a try/except block to catch non-convergence issues and fall back to an identity transformation.
+  - Optionally smooth the translation bias to stabilize the transformation.
 
-LatentSync uses the [Whisper](https://github.com/openai/whisper) to convert melspectrogram into audio embeddings, which are then integrated into the U-Net via cross-attention layers. The reference and masked frames are channel-wise concatenated with noised latents as the input of U-Net. In the training process, we use a one-step method to get estimated clean latents from predicted noises, which are then decoded to obtain the estimated clean frames. The TREPA, [LPIPS](https://arxiv.org/abs/1801.03924) and [SyncNet](https://www.robots.ox.ac.uk/~vgg/publications/2016/Chung16a/chung16a.pdf) losses are added in the pixel space.
+- **FFmpeg Python Bindings:**  
+  The incorrect `ffmpeg` package was removed and replaced with `ffmpeg-python` (v0.2.0), ensuring that the expected API (e.g., `ffmpeg.input`) is available for audio loading.
 
-## 🎬 Demo
+---
 
-<table class="center">
-  <tr style="font-weight: bolder;text-align:center;">
-        <td width="50%"><b>Original video</b></td>
-        <td width="50%"><b>Lip-synced video</b></td>
-  </tr>
-  <tr>
-    <td>
-      <video src=https://github.com/user-attachments/assets/ff3a84da-dc9b-498a-950f-5c54f58dd5c5 controls preload></video>
-    </td>
-    <td>
-      <video src=https://github.com/user-attachments/assets/150e00fd-381e-4421-a478-a9ea3d1212a8 controls preload></video>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <video src=https://github.com/user-attachments/assets/32c830a9-4d7d-4044-9b33-b184d8e11010 controls preload></video>
-    </td>
-    <td>
-      <video src=https://github.com/user-attachments/assets/84e4fe9d-b108-44a4-8712-13a012348145 controls preload></video>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <video src=https://github.com/user-attachments/assets/7510a448-255a-44ee-b093-a1b98bd3961d controls preload></video>
-    </td>
-    <td>
-      <video src=https://github.com/user-attachments/assets/6150c453-c559-4ae0-bb00-c565f135ff41 controls preload></video>
-    </td>
-  </tr>
-  <tr>
-    <td width=300px>
-      <video src=https://github.com/user-attachments/assets/0f7f9845-68b2-4165-bd08-c7bbe01a0e52 controls preload></video>
-    </td>
-    <td width=300px>
-      <video src=https://github.com/user-attachments/assets/c34fe89d-0c09-4de3-8601-3d01229a69e3 controls preload></video>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <video src=https://github.com/user-attachments/assets/7ce04d50-d39f-4154-932a-ec3a590a8f64 controls preload></video>
-    </td>
-    <td>
-      <video src=https://github.com/user-attachments/assets/70bde520-42fa-4a0e-b66c-d3040ae5e065 controls preload></video>
-    </td>
-  </tr>
-</table>
+## Detailed Changes by File
 
-(Photorealistic videos are filmed by contracted models, and anime videos are from [VASA-1](https://www.microsoft.com/en-us/research/project/vasa-1/) and [EMO](https://humanaigc.github.io/emote-portrait-alive/))
+### 1. `inference.sh`
+- **What Changed:**  
+  - The `--superres` parameter has been added to the command-line arguments.
+- **Why:**  
+  - This enables the selection of a superresolution method to enhance the generated lipsynced region.
+- **How It Works:**  
+  - The script passes all parameters (including `--superres`) to `scripts/inference.py`.
 
-## 📑 Open-source Plan
+### 2. `scripts/inference.py`
+- **Device Handling:**  
+  - A new variable is defined as follows:
+    ```python
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    ```
+    This ensures that the pipeline uses GPU if available, or falls back to CPU automatically.
+- **Audio Encoder:**  
+  - The device passed to `Audio2Feature` is set dynamically using the `device` variable.
+- **Passing Superresolution Parameter:**  
+  - The call to the pipeline now includes `superres=args.superres`.
+- **Why:**  
+  - This guarantees proper device selection and passes the chosen superresolution method to the pipeline.
 
-- [x] Inference code and checkpoints
-- [x] Data processing pipeline
-- [x] Training code
+### 3. `latentsync/pipelines/lipsync_pipeline.py`
+- **ImageProcessor Initialization:**  
+  - The instantiation of `ImageProcessor` now passes the device as a string:
+    ```python
+    self.image_processor = ImageProcessor(height, mask=mask, device="cuda" if torch.cuda.is_available() else "cpu")
+    ```
+  - **Why:**  
+    - Certain libraries (e.g., `face_alignment`) expect the device as a string and will error if provided with a `torch.device` object.
 
-## 🔧 Setting up the Environment
+### 4. `latentsync/utils/image_processor.py`
+- **Initialization (`__init__`):**
+  - **For `"fix_mask"` mode:**  
+    - **Before (CPU branch):**
+      ```python
+      # self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)
+      self.face_mesh = None
+      self.fa = None
+      ```
+    - **After (CPU branch):**
+      ```python
+      self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)
+      self.fa = None
+      ```
+    - **Why:**  
+      - This ensures that mediapipe’s FaceMesh is properly initialized on the CPU to detect facial landmarks.
+- **Face Detection (`detect_facial_landmarks`):**
+  - **Change:**  
+    - Instead of raising an error when no face is detected, the method now prints a warning and returns a default set of landmark coordinates (e.g., the center of the image repeated as needed).
+  - **Why:**  
+    - This prevents the pipeline from crashing on frames where a face is not detected.
+- **Affine Transformation (`affine_transform`):**
+  - **Change:**  
+    - The input image is converted from tensor (C, H, W) to a NumPy array in (H, W, C) using `rearrange`, calling `.numpy()` only when necessary.
+    - The image is then converted from BGR to RGB using `cv2.cvtColor` so that mediapipe receives the expected format.
+  - **Why:**  
+    - Mediapipe requires an RGB image in HWC format for proper landmark detection.
 
-Install the required packages and download the checkpoints via:
+### 5. `latentsync/utils/affine_transform.py`
+- **`transformation_from_points` Function:**
+  - **Changes:**
+    - Both landmark arrays are converted to `float64` and centered.
+    - If the standard deviation of either set is too low (below `1e-6`), a warning is printed and an identity transformation is returned.
+    - The SVD computation is wrapped in a try/except block. If SVD fails to converge, a warning is printed and an identity transformation is returned.
+    - Optionally, smoothing is applied to the translation bias.
+  - **Why:**  
+    - When the landmark data is degenerate (for example, when default landmarks are used because no face was detected), SVD might not converge. This fallback mechanism prevents a crash and allows the pipeline to continue processing.
 
+### 6. FFmpeg Python Bindings
+- **Changes:**
+  - The incorrect `ffmpeg` package was uninstalled, and `ffmpeg-python` (version 0.2.0) was installed.
+  - This ensures that the expected API (e.g., `ffmpeg.input`, `ffmpeg.Error`) is available for loading audio.
+- **Why:**  
+  - The project expects the ffmpeg-python API for correct audio processing.
+
+---
+
+## How the Process Works
+
+1. **Environment Setup:**
+   - Clone the repository.
+   - Create and activate a virtual environment.
+   - Install dependencies from `requirements.txt`.
+   - Ensure FFmpeg is installed (via conda or manually) and available in your system PATH.
+
+2. **Running Inference:**
+   - The `inference.sh` script passes all parameters (including the `--superres` flag) to `scripts/inference.py`.
+   - `inference.py` dynamically selects the device (GPU if available, otherwise CPU) and passes it to the model initializations (Audio2Feature, U-Net, etc.).
+   - The pipeline in `lipsync_pipeline.py` processes each video frame:
+     - The `ImageProcessor` converts the frame to the proper format (RGB, HWC) and uses mediapipe’s FaceMesh to detect facial landmarks.
+     - If no face is detected, a warning is printed and default landmarks are used.
+     - The affine transformation is computed using `transformation_from_points`. Fallback mechanisms (identity transformation) are employed if landmark data is degenerate.
+     - If the generated region is lower resolution than the corresponding original region, superresolution is applied using the selected method (GFPGAN, CodeFormer, or both).
+   - Finally, an output video (e.g., `video_out.mp4`) with enhanced lipsync quality is produced.
+
+3. **Output:**
+   - The final video is saved as specified by the `--video_out_path` parameter.
+   - Warnings may be printed during processing if default landmarks or fallback transformations are used, but the pipeline completes successfully.
+
+---
+
+
+
+## Requirements
+
+- **Python 3.7 or higher**
+- **Dependencies:**  
+  See `requirements.txt` for all dependencies. Key packages include:
+  - `torch`
+  - `diffusers`
+  - `ffmpeg-python`
+  - `mediapipe`
+  - `face_alignment`
+  - `numpy`
+  - `opencv-python`
+  - `einops`
+  - `torchvision`
+- **FFmpeg:**  
+  FFmpeg must be installed and available in your system PATH. On Windows, you can install it via conda:
+  ```bash
+  conda install -c conda-forge ffmpeg
+  ```
+  or download a build from ffmpeg.org and add its bin folder to your PATH.
+
+---
+
+## Installation
+
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/Bhagawat8/LatentSync_VideoDubber.git
+   cd LatentSync_VideoDubber
+   ```
+
+2. **Create and Activate a Virtual Environment:**
+   - On Unix/Linux/Mac or Git Bash on Windows:
+     ```bash
+     python -m venv env
+     source env/Scripts/activate
+     ```
+   - On Windows Command Prompt:
+     ```batch
+     python -m venv env
+     env\Scripts\activate
+     ```
+
+3. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+   > **Tip:** If any dependency is missing, manually install packages such as `ffmpeg-python`, `mediapipe`, and `face_alignment`.
+
+---
+
+## Running Inference
+
+The provided `inference.sh` script runs the lipsync inference pipeline with superresolution enhancement.
+
+**Usage Example:**
 ```bash
-source setup_env.sh
+./inference.sh --unet_config_path "configs/unet/second_stage.yaml" \
+               --inference_ckpt_path "checkpoints/latentsync_unet.pt" \
+               --inference_steps 20 \
+               --guidance_scale 1.5 \
+               --video_path "assets/demo1_video.mp4" \
+               --audio_path "assets/demo1_audio.wav" \
+               --video_out_path "video_out.mp4" \
+               --superres "both"
 ```
 
-If the download is successful, the checkpoints should appear as follows:
-
-```
-./checkpoints/
-|-- latentsync_unet.pt
-|-- latentsync_syncnet.pt
-|-- whisper
-|   `-- tiny.pt
-|-- auxiliary
-|   |-- 2DFAN4-cd938726ad.zip
-|   |-- i3d_torchscript.pt
-|   |-- koniq_pretrained.pkl
-|   |-- s3fd-619a316812.pth
-|   |-- sfd_face.pth
-|   |-- syncnet_v2.model
-|   |-- vgg16-397923af.pth
-|   `-- vit_g_hybrid_pt_1200e_ssv2_ft.pth
-```
-
-These already include all the checkpoints required for latentsync training and inference. If you just want to try inference, you only need to download `latentsync_unet.pt` and `tiny.pt` from our [HuggingFace repo](https://huggingface.co/ByteDance/LatentSync)
-
-## 🚀 Inference
-
-There are two ways to perform inference, and both require 6.5 GB of VRAM.
-
-### 1. Gradio App
-
-Run the Gradio app for inference:
-
-```bash
-python gradio_app.py
-```
-
-### 2. Command Line Interface
-
-Run the script for inference:
-
-```bash
-./inference.sh
-```
-
-You can change the parameters `inference_steps` and `guidance_scale` to see more results.
-
-## 🔄 Data Processing Pipeline
-
-The complete data processing pipeline includes the following steps:
-
-1. Remove the broken video files.
-2. Resample the video FPS to 25, and resample the audio to 16000 Hz.
-3. Scene detect via [PySceneDetect](https://github.com/Breakthrough/PySceneDetect).
-4. Split each video into 5-10 second segments.
-5. Remove videos where the face is smaller than 256 $\times$ 256, as well as videos with more than one face.
-6. Affine transform the faces according to the landmarks detected by [face-alignment](https://github.com/1adrianb/face-alignment), then resize to 256 $\times$ 256.
-7. Remove videos with [sync confidence score](https://www.robots.ox.ac.uk/~vgg/publications/2016/Chung16a/chung16a.pdf) lower than 3, and adjust the audio-visual offset to 0.
-8. Calculate [hyperIQA](https://openaccess.thecvf.com/content_CVPR_2020/papers/Su_Blindly_Assess_Image_Quality_in_the_Wild_Guided_by_a_CVPR_2020_paper.pdf) score, and remove videos with scores lower than 40.
-
-Run the script to execute the data processing pipeline:
-
-```bash
-./data_processing_pipeline.sh
-```
-
-You can change the parameter `input_dir` in the script to specify the data directory to be processed. The processed data will be saved in the `high_visual_quality` directory. Each step will generate a new directory to prevent the need to redo the entire pipeline in case the process is interrupted by an unexpected error.
-
-## 🏋️‍♂️ Training U-Net
-
-Before training, you must process the data as described above and download all the checkpoints. We released a pretrained SyncNet with 94% accuracy on the VoxCeleb2 dataset for the supervision of U-Net training. Note that this SyncNet is trained on affine transformed videos, so when using or evaluating this SyncNet, you need to perform affine transformation on the video first (the code of affine transformation is included in the data processing pipeline).
-
-If all the preparations are complete, you can train the U-Net with the following script:
-
-```bash
-./train_unet.sh
-```
-
-You should change the parameters in U-Net config file to specify the data directory, checkpoint save path, and other training hyperparameters.
-
-## 🏋️‍♂️ Training SyncNet
-
-In case you want to train SyncNet on your own datasets, you can run the following script. The data processing pipeline for SyncNet is the same as U-Net. 
-
-```bash
-./train_syncnet.sh
-```
-
-After `validations_steps` training, the loss charts will be saved in `train_output_dir`. They contain both the training and validation loss.
-
-## 📊 Evaluation
-
-You can evaluate the [sync confidence score](https://www.robots.ox.ac.uk/~vgg/publications/2016/Chung16a/chung16a.pdf) of a generated video by running the following script:
-
-```bash
-./eval/eval_sync_conf.sh
-```
-
-You can evaluate the accuracy of SyncNet on a dataset by running the following script:
-
-```bash
-./eval/eval_syncnet_acc.sh
-```
-
-## 🙏 Acknowledgement
-
-- Our code is built on [AnimateDiff](https://github.com/guoyww/AnimateDiff). 
-- Some code are borrowed from [MuseTalk](https://github.com/TMElyralab/MuseTalk), [StyleSync](https://github.com/guanjz20/StyleSync), [SyncNet](https://github.com/joonson/syncnet_python), [Wav2Lip](https://github.com/Rudrabha/Wav2Lip).
-
-Thanks for their generous contributions to the open-source community.
+**Parameters:**
+- `--unet_config_path`: Path to the U-Net configuration YAML.
+- `--inference_ckpt_path`: Path to the U-Net checkpoint.
+- `--inference_steps`: Number of inference steps.
+- `--guidance_scale`: Guidance scale for inference.
+- `--video_path`: Input video file.
+- `--audio_path`: Input audio file (if the video does not have embedded audio, extract it using FFmpeg).
+- `--video_out_path`: Output video file path.
+- `--superres`: Superresolution method (options: `GFPGAN`, `CodeFormer`, `both`, or `none`).

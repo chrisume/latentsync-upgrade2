@@ -5,8 +5,8 @@ import cv2
 
 
 def transformation_from_points(points1, points0, smooth=True, p_bias=None):
-    points2 = np.array(points0)
-    points2 = points2.astype(np.float64)
+    points2 = np.array(points0 , dtype=np.float64)
+    
     points1 = points1.astype(np.float64)
     c1 = np.mean(points1, axis=0)
     c2 = np.mean(points2, axis=0)
@@ -14,13 +14,34 @@ def transformation_from_points(points1, points0, smooth=True, p_bias=None):
     points2 -= c2
     s1 = np.std(points1)
     s2 = np.std(points2)
+
+
+    # If standard deviation is too small, fallback to identity
+    if s1 < 1e-6 or s2 < 1e-6:
+        print("Warning: Standard deviation of points is too low, using identity transformation.")
+        M = np.concatenate((np.eye(2), np.zeros((2, 1))), axis=1)
+        return M, p_bias
+    
     points1 /= s1
     points2 /= s2
-    U, S, Vt = np.linalg.svd(np.matmul(points1.T, points2))
+
+
+    # Try to compute SVD; if it fails, return identity
+    try:
+        U, S, Vt = np.linalg.svd(np.matmul(points1.T, points2))
+    except np.linalg.LinAlgError:
+        print("Warning: SVD did not converge, using identity transformation.")
+        M = np.concatenate((np.eye(2), np.zeros((2, 1))), axis=1)
+        return M, p_bias
+
+
     R = (np.matmul(U, Vt)).T
     sR = (s2 / s1) * R
+
     T = c2.reshape(2, 1) - (s2 / s1) * np.matmul(R, c1.reshape(2, 1))
+
     M = np.concatenate((sR, T), axis=1)
+    
     if smooth:
         bias = points2[2] - points1[2]
         if p_bias is None:
