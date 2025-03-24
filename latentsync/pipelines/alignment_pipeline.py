@@ -46,16 +46,14 @@ class AlignmentPipeline:
                     break
 
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                status, face, box, affine_matrix = self.image_processor.affine_transform(frame_rgb)
+                face, box, affine_matrix = self.image_processor.affine_transform(frame_rgb)
+                face = rearrange(face, "c h w -> h w c").to(torch.uint8).cpu().numpy()
+                aligned_file_path = os.path.join(folder_path, f"{frame_count}.png")
+                affine_path = os.path.join(folder_path, f"{frame_count}.json")
 
-                if status:
-                    face = rearrange(face, "c h w -> h w c").to(torch.uint8).cpu().numpy()
-                    aligned_file_path = os.path.join(folder_path, f"{frame_count}.png")
-                    affine_path = os.path.join(folder_path, f"{frame_count}.json")
-
-                    cv2.imwrite(aligned_file_path, face[:, :, ::-1])
-                    with open(affine_path, "w") as f:
-                        json.dump({"rot_mat": affine_matrix.tolist(), "box": box}, f)
+                cv2.imwrite(aligned_file_path, face[:, :, ::-1])
+                with open(affine_path, "w") as f:
+                    json.dump({"rot_mat": affine_matrix.tolist(), "box": box}, f)
 
                 frame_count += 1
                 pbar.update(1)
