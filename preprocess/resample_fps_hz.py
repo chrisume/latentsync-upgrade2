@@ -23,14 +23,16 @@ paths = []
 
 def gather_paths(input_dir, output_dir):
     for video in sorted(os.listdir(input_dir)):
-        if video.endswith(".mp4"):
+        if video.endswith(".mp4") or video.endswith(".mov"):
             video_input = os.path.join(input_dir, video)
             video_output = os.path.join(output_dir, video)
             if os.path.isfile(video_output):
                 continue
             paths.append([video_input, video_output])
         elif os.path.isdir(os.path.join(input_dir, video)):
-            gather_paths(os.path.join(input_dir, video), os.path.join(output_dir, video))
+            gather_paths(
+                os.path.join(input_dir, video), os.path.join(output_dir, video)
+            )
 
 
 def get_video_fps(video_path: str):
@@ -58,7 +60,9 @@ def resample_fps_hz_multiprocessing(input_dir, output_dir, num_workers):
 
     print(f"Resampling FPS and Hz of {input_dir} ...")
     with Pool(num_workers) as pool:
-        for _ in tqdm.tqdm(pool.imap_unordered(multi_run_wrapper, paths), total=len(paths)):
+        for _ in tqdm.tqdm(
+            pool.imap_unordered(multi_run_wrapper, paths), total=len(paths)
+        ):
             pass
 
 
