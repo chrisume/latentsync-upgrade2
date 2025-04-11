@@ -20,7 +20,7 @@ import torch
 import numpy as np
 from typing import Union
 from .affine_transform import AlignRestore, laplacianSmooth
-import face_alignment
+from scripts.insight_det import get_insight_face_one_frame
 
 """
 If you are enlarging the image, you should prefer to use INTER_LINEAR or INTER_CUBIC interpolation. If you are shrinking the image, you should prefer to use INTER_AREA interpolation.
@@ -58,14 +58,12 @@ class ImageProcessor:
                 self.mask_image = mask_image
 
             if device != "cpu":
-                self.fa = face_alignment.FaceAlignment(
-                    face_alignment.LandmarksType.TWO_D, flip_input=False, device=device
-                )
+                self.insight = get_insight_face_one_frame
                 self.face_mesh = None
             else:
                 # self.face_mesh = mp.solutions.face_mesh.FaceMesh(static_image_mode=True)  # Process single image
                 self.face_mesh = None
-                self.fa = None
+                self.insight = None
 
     def detect_facial_landmarks(self, image: np.ndarray):
         height, width, _ = image.shape
@@ -115,24 +113,31 @@ class ImageProcessor:
 
         return pixel_values, masked_pixel_values, mask
 
+    # TODO: in the future, set param:return_lmk can help paste back nad excluding some special cases
     def affine_transform(self, image: torch.Tensor, allow_multi_faces: bool = True) -> np.ndarray:
         # image = rearrange(image, "c h w-> h w c").numpy()
-        if self.fa is None:
+        if self.insight is None:
             landmark_coordinates = np.array(self.detect_facial_landmarks(image))
             lm68 = mediapipe_lm478_to_face_alignment_lm68(landmark_coordinates)
         else:
-            detected_faces = self.fa.get_landmarks(image)
+            _, detected_faces = self.insight(image)
             if detected_faces is None:
                 raise RuntimeError("Face not detected")
             if not allow_multi_faces and len(detected_faces) > 1:
                 raise RuntimeError("More than one face detected")
-            lm68 = detected_faces[0]
+            lm68 = detected_faces
 
-        points = self.smoother.smooth(lm68)
-        lmk3_ = np.zeros((3, 2))
-        lmk3_[0] = points[17:22].mean(0)
-        lmk3_[1] = points[22:27].mean(0)
-        lmk3_[2] = points[27:36].mean(0)
+        landmark_2d_106 = lm68
+        landmarks = [
+            np.round(landmark_2d_106[49]),
+            np.round(landmark_2d_106[104]),
+            np.round(landmark_2d_106[86]),
+        ]
+        
+        lmk3_ = np.zeros((3, 2)) 
+        lmk3_[0] = landmarks[0]  # 左眼
+        lmk3_[1] = landmarks[1]  # 右眼  
+        lmk3_[2] = landmarks[2]  # 鼻子 
         # print(lmk3_)
         face, affine_matrix = self.restorer.align_warp_face(
             image.copy(), lmks3=lmk3_, smooth=True, border_mode="constant"

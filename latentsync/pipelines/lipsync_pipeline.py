@@ -268,6 +268,7 @@ class LipsyncPipeline(DiffusionPipeline):
         video_frames = video_frames[: len(faces)]
         out_frames = []
         print(f"Restoring {len(faces)} faces...")
+        torch.cuda.empty_cache()
         for index, face in enumerate(tqdm.tqdm(faces)):
             x1, y1, x2, y2 = boxes[index]
             height = int(y2 - y1)
@@ -279,6 +280,7 @@ class LipsyncPipeline(DiffusionPipeline):
             # face = cv2.resize(face, (width, height), interpolation=cv2.INTER_LANCZOS4)
             out_frame = self.image_processor.restorer.restore_img(video_frames[index], face, affine_matrices[index])
             out_frames.append(out_frame)
+        torch.cuda.empty_cache()
         return np.stack(out_frames, axis=0)
 
     def loop_video(self, whisper_chunks: list, video_frames: np.ndarray):
