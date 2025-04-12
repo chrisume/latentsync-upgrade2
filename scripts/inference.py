@@ -40,7 +40,7 @@ def main(config, args):
     scheduler = DDIMScheduler.from_pretrained("configs")
 
     if config.model.cross_attention_dim == 768:
-        whisper_model_path = "checkpoints/whisper/small.pt"
+        whisper_model_path = "checkpoints/whisper/large-v3.pt"
     elif config.model.cross_attention_dim == 384:
         whisper_model_path = "checkpoints/whisper/tiny.pt"
     else:

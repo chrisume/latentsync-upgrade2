@@ -109,7 +109,7 @@ def main(config):
     syncnet_detector = SyncNetDetector(device=device, detect_results_dir="detect_results")
 
     if config.model.cross_attention_dim == 768:
-        whisper_model_path = "checkpoints/whisper/small.pt"
+        whisper_model_path = "checkpoints/whisper/large-v3.pt"
     elif config.model.cross_attention_dim == 384:
         whisper_model_path = "checkpoints/whisper/tiny.pt"
     else:
